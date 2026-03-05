@@ -1,0 +1,64 @@
+{
+  "name": "proto_local_tidy_helper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "未踏向けローカル片付け支援AI",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:backend\" \"npm:dev:electron\"",
+    "dev:renderer": "vite --host 127.0.0.1",
+    "dev:backend": "uv run --project backend python -m tidy_helper.app.main",
+    "dev:electron": "wait-on tcp:127.0.0.1:5173 tcp:127.0.0.1:8765 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
+    "build": "npm run build:renderer",
+    "build:renderer": "tsc && vite build",
+    "lint": "tsc --noEmit",
+    "preview": "vite preview --host 127.0.0.1",
+    "test:e2e": "playwright test",
+    "dist:win": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false npm run build && electron-builder --win portable"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.0",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^40.7.0",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "wait-on": "^9.0.3"
+  },
+  "build": {
+    "appId": "ai.kantahayashi.mitoutidyhelper",
+    "productName": "Mitou Local Tidy Helper",
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/.pytest_cache/**",
+          "!**/.venv/**"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "signAndEditExecutable": false
+    }
+  }
+}
