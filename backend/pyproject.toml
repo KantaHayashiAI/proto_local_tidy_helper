@@ -1,0 +1,40 @@
+[project]
+name = "mitou-local-tidy-helper-backend"
+version = "0.1.0"
+description = "Local core service for the Mitou tidy helper desktop app."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "apscheduler>=3.11.1",
+  "fastapi>=0.116.1",
+  "httpx>=0.28.1",
+  "onvif-zeep>=0.2.12",
+  "openai>=2.8.1",
+  "opencv-python-headless>=4.12.0.88",
+  "pillow>=11.3.0",
+  "pydantic>=2.12.0",
+  "python-dotenv>=1.2.1",
+  "python-multipart>=0.0.20",
+  "sqlalchemy>=2.0.44",
+  "uvicorn>=0.38.0",
+  "websockets>=15.0.1"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.4.2",
+  "pytest-asyncio>=1.3.0",
+  "pytest-cov>=7.0.0"
+]
+
+[build-system]
+requires = ["setuptools>=80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["tidy_helper*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
