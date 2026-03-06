@@ -14,10 +14,8 @@ class AppConfig:
     env_file: Path | None
     openai_api_key: str | None
     openrouter_api_key: str | None
-    default_openai_model: str
-    default_openrouter_model: str
-    default_local_base_url: str
-    default_local_model: str
+    default_vision_base_url: str
+    default_vision_model: str
     timezone: str
 
 
@@ -40,15 +38,13 @@ def load_config() -> AppConfig:
         env_file=env_path,
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY"),
-        default_openai_model=os.getenv("OPENAI_VISION_MODEL", "gpt-4.1-mini"),
-        default_openrouter_model=os.getenv(
-            "OPENROUTER_VISION_MODEL", "qwen/qwen3.5-397b-a17b"
+        default_vision_base_url=os.getenv(
+            "VISION_BASE_URL",
+            os.getenv("LOCAL_VISION_BASE_URL", "http://127.0.0.1:8080/v1"),
         ),
-        default_local_base_url=os.getenv(
-            "LOCAL_VISION_BASE_URL", "http://127.0.0.1:8080/v1"
-        ),
-        default_local_model=os.getenv(
-            "LOCAL_VISION_MODEL", "Qwen/Qwen2.5-VL-7B-Instruct"
+        default_vision_model=os.getenv(
+            "VISION_MODEL",
+            os.getenv("LOCAL_VISION_MODEL", "Qwen/Qwen2.5-VL-7B-Instruct"),
         ),
         timezone=os.getenv("MITOU_TIDY_TIMEZONE", "Asia/Tokyo"),
     )

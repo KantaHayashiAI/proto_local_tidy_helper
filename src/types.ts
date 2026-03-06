@@ -1,4 +1,3 @@
-export type ProviderKind = "local" | "openai" | "openrouter";
 export type CameraKind = "rtsp_onvif" | "mock";
 
 export type MaskRegion = {
@@ -36,11 +35,8 @@ export type CameraProfile = {
 
 export type Settings = {
   locale: string;
-  ai_provider: ProviderKind;
-  local_base_url: string;
-  local_model: string;
-  openai_model: string;
-  openrouter_model: string;
+  vision_base_url: string;
+  vision_model: string;
   capture_interval_minutes: number;
   quiet_hours_start: string;
   quiet_hours_end: string;

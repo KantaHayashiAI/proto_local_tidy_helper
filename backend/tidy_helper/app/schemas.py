@@ -8,11 +8,8 @@ from pydantic import BaseModel, Field, field_validator
 
 class SettingsPayload(BaseModel):
     locale: str = "ja"
-    ai_provider: Literal["local", "openai", "openrouter"] = "local"
-    local_base_url: str = ""
-    local_model: str = ""
-    openai_model: str = ""
-    openrouter_model: str = ""
+    vision_base_url: str = ""
+    vision_model: str = ""
     capture_interval_minutes: int = 180
     quiet_hours_start: str = "23:00"
     quiet_hours_end: str = "08:00"

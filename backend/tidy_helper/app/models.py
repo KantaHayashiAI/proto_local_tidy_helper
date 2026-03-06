@@ -19,11 +19,8 @@ class Settings(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     locale: Mapped[str] = mapped_column(String(8), default="ja")
-    ai_provider: Mapped[str] = mapped_column(String(32), default="local")
-    local_base_url: Mapped[str] = mapped_column(String(255), default="")
-    local_model: Mapped[str] = mapped_column(String(255), default="")
-    openai_model: Mapped[str] = mapped_column(String(255), default="")
-    openrouter_model: Mapped[str] = mapped_column(String(255), default="")
+    vision_base_url: Mapped[str] = mapped_column(String(255), default="")
+    vision_model: Mapped[str] = mapped_column(String(255), default="")
     capture_interval_minutes: Mapped[int] = mapped_column(Integer, default=180)
     quiet_hours_start: Mapped[str] = mapped_column(String(5), default="23:00")
     quiet_hours_end: Mapped[str] = mapped_column(String(5), default="08:00")

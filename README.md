@@ -70,7 +70,7 @@ npm run dev
 
 既定ではローカルプロバイダを使います。`llama.cpp` など OpenAI 互換の `/chat/completions` を持つサーバーを用意し、`ローカル base URL` と `ローカルモデル` を設定してください。
 
-テストや UI 確認だけをしたい場合は `local_base_url` に `mock://local-vlm` を指定すると、決定論的なモック分析を返します。
+テストや UI 確認だけをしたい場合は `vision_base_url` に `mock://local-vlm` を指定すると、決定論的なモック分析を返します。
 
 ## スクリプト
 

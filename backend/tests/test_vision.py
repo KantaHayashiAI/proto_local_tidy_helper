@@ -5,12 +5,17 @@ from pathlib import Path
 
 import pytest
 
+from tidy_helper.app.config import AppConfig
+from tidy_helper.app.schemas import SettingsPayload
 from tidy_helper.app.services.vision import (
+    DeterministicVisionProvider,
     OpenAICompatibleVisionProvider,
     OpenAICompatibleResponsesVisionProvider,
     PreferResponsesVisionProvider,
     ResponsesUnsupportedError,
     VisionProvider,
+    VisionError,
+    build_vision_provider,
 )
 
 
@@ -135,3 +140,67 @@ def test_prefer_responses_provider_keeps_primary_on_success():
     assert result == {"status": "primary"}
     assert [call[0] for call in primary.calls] == ["analyze_scene"]
     assert fallback.calls == []
+
+
+def test_build_vision_provider_uses_base_url_for_openrouter():
+    config = AppConfig(
+        port=8765,
+        app_data_root=Path("."),
+        env_file=None,
+        openai_api_key=None,
+        openrouter_api_key="test-openrouter-key",
+        default_vision_base_url="http://127.0.0.1:8080/v1",
+        default_vision_model="Qwen/Qwen2.5-VL-7B-Instruct",
+        timezone="Asia/Tokyo",
+    )
+    settings = SettingsPayload(
+        vision_base_url="https://openrouter.ai/api/v1",
+        vision_model="qwen/qwen3.5-397b-a17b",
+    )
+
+    provider = build_vision_provider(settings, config)
+
+    assert isinstance(provider, PreferResponsesVisionProvider)
+    assert provider.primary.name == "openrouter"
+    assert provider.primary.api_key == "test-openrouter-key"
+
+
+def test_build_vision_provider_requires_matching_api_key_for_openai():
+    config = AppConfig(
+        port=8765,
+        app_data_root=Path("."),
+        env_file=None,
+        openai_api_key=None,
+        openrouter_api_key=None,
+        default_vision_base_url="http://127.0.0.1:8080/v1",
+        default_vision_model="Qwen/Qwen2.5-VL-7B-Instruct",
+        timezone="Asia/Tokyo",
+    )
+    settings = SettingsPayload(
+        vision_base_url="https://api.openai.com/v1",
+        vision_model="gpt-4.1-mini",
+    )
+
+    with pytest.raises(VisionError, match="OPENAI_API_KEY"):
+        build_vision_provider(settings, config)
+
+
+def test_build_vision_provider_returns_mock_for_mock_scheme():
+    config = AppConfig(
+        port=8765,
+        app_data_root=Path("."),
+        env_file=None,
+        openai_api_key=None,
+        openrouter_api_key=None,
+        default_vision_base_url="mock://local-vlm",
+        default_vision_model="deterministic-mock",
+        timezone="Asia/Tokyo",
+    )
+    settings = SettingsPayload(
+        vision_base_url="mock://local-vlm",
+        vision_model="deterministic-mock",
+    )
+
+    provider = build_vision_provider(settings, config)
+
+    assert isinstance(provider, DeterministicVisionProvider)
