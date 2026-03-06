@@ -55,10 +55,18 @@ def test_end_to_end_mock_capture_flow(client):
     state = test_client.get("/api/state")
     assert state.status_code == 200
     assert state.json()["active_tasks"]
+    task_id = state.json()["active_tasks"][0]["id"]
+    assert "snoozed_until" not in state.json()["active_tasks"][0]
 
     history = test_client.get("/api/history")
     assert history.status_code == 200
     assert len(history.json()) == 1
+
+    done = test_client.post(f"/api/tasks/{task_id}/done")
+    assert done.status_code == 404
+
+    snooze = test_client.post(f"/api/tasks/{task_id}/snooze", json={"minutes": 120})
+    assert snooze.status_code == 404
 
     diagnostics = test_client.get("/api/diagnostics")
     assert diagnostics.status_code == 200

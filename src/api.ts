@@ -79,19 +79,6 @@ export async function upsertRule(rule: MemoryRule) {
   });
 }
 
-export async function markTaskDone(taskId: number) {
-  return request<{ ok: boolean }>(`/api/tasks/${taskId}/done`, {
-    method: "POST"
-  });
-}
-
-export async function snoozeTask(taskId: number, minutes: number) {
-  return request<{ ok: boolean }>(`/api/tasks/${taskId}/snooze`, {
-    method: "POST",
-    body: JSON.stringify({ minutes })
-  });
-}
-
 export function connectWebSocket(onMessage: (message: WebSocketMessage) => void) {
   const socket = new WebSocket("ws://127.0.0.1:8765/ws");
   socket.onmessage = (event) => {

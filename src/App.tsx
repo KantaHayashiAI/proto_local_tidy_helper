@@ -4,11 +4,9 @@ import {
   fetchDiagnostics,
   fetchHistory,
   fetchState,
-  markTaskDone,
   patchSettings,
   runCaptureNow,
   savePreset,
-  snoozeTask,
   upsertRule,
   validateCamera
 } from "./api";
@@ -225,18 +223,6 @@ export default function App() {
     } finally {
       setBusy(false);
     }
-  }
-
-  async function handleDoneTask(taskId: number) {
-    await markTaskDone(taskId);
-    setStatusMessage("タスクを完了にしました。");
-    await refreshAll();
-  }
-
-  async function handleSnoozeTask(taskId: number) {
-    await snoozeTask(taskId, 120);
-    setStatusMessage("2時間スヌーズしました。");
-    await refreshAll();
   }
 
   function beginMaskDraw(event: React.MouseEvent<HTMLDivElement>) {
@@ -599,12 +585,7 @@ export default function App() {
                     <small>{task.reason}</small>
                   </div>
                   <div className="task-actions">
-                    <button className="primary" onClick={() => handleDoneTask(task.id)}>
-                      完了
-                    </button>
-                    <button className="ghost" onClick={() => handleSnoozeTask(task.id)}>
-                      2h スヌーズ
-                    </button>
+                    <small>次回観測で自動判定</small>
                   </div>
                 </article>
               ))

@@ -111,7 +111,6 @@ class Task(Base):
     estimated_minutes: Mapped[int] = mapped_column(Integer)
     expected_visual_change: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32), default="active")
-    snoozed_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_evaluated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -151,19 +151,14 @@ def get_active_camera(session: Session) -> CameraProfile | None:
 
 
 def get_active_tasks(session: Session, now: datetime | None = None) -> list[Task]:
-    now = now or datetime.now(UTC)
-    tasks = list(
+    del now
+    return list(
         session.scalars(
             select(Task)
             .where(Task.status == "active")
             .order_by(Task.priority.desc(), Task.created_at.desc())
         )
     )
-    return [
-        task
-        for task in tasks
-        if task.snoozed_until is None or task.snoozed_until <= now.replace(tzinfo=None)
-    ]
 
 
 def serialize_task(task: Task) -> ActiveTaskResponse:
