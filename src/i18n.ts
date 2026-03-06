@@ -1,8 +1,8 @@
 const ja = {
-  title: "部屋が、そっと声をかける",
-  subtitle: "定点観測 × ローカルVLM × プッシュ型片付け支援",
+  title: "ローカル片付け支援AI",
+  subtitle: "固定視点の観測とローカルVLMで、次の一手を提案します",
   save: "保存",
-  validate: "接続診断",
+  validate: "接続確認",
   runNow: "今すぐ観測",
   diagnostics: "診断",
   history: "履歴",
@@ -11,8 +11,8 @@ const ja = {
 };
 
 const en = {
-  title: "The room gently speaks",
-  subtitle: "Stationary vision, local VLM, and push-based tidy coaching",
+  title: "Local Tidy Helper",
+  subtitle: "Stationary vision, local VLM, and next-step guidance",
   save: "Save",
   validate: "Validate",
   runNow: "Run now",
