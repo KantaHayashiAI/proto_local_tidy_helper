@@ -73,11 +73,8 @@ def is_quiet_hours(now: datetime, start_label: str, end_label: str) -> bool:
 def settings_to_payload(settings: Settings) -> SettingsPayload:
     return SettingsPayload(
         locale=settings.locale,
-        ai_provider=settings.ai_provider,
-        local_base_url=settings.local_base_url,
-        local_model=settings.local_model,
-        openai_model=settings.openai_model,
-        openrouter_model=settings.openrouter_model,
+        vision_base_url=settings.vision_base_url,
+        vision_model=settings.vision_model,
         capture_interval_minutes=settings.capture_interval_minutes,
         quiet_hours_start=settings.quiet_hours_start,
         quiet_hours_end=settings.quiet_hours_end,
@@ -133,14 +130,15 @@ def ensure_settings(session: Session, config: AppConfig) -> Settings:
         settings = Settings(
             id=1,
             locale="ja",
-            ai_provider="local",
-            local_base_url=config.default_local_base_url,
-            local_model=config.default_local_model,
-            openai_model=config.default_openai_model,
-            openrouter_model=config.default_openrouter_model,
+            vision_base_url=config.default_vision_base_url,
+            vision_model=config.default_vision_model,
         )
         session.add(settings)
         session.flush()
+    if not settings.vision_base_url:
+        settings.vision_base_url = config.default_vision_base_url
+    if not settings.vision_model:
+        settings.vision_model = config.default_vision_model
     return settings
 
 

@@ -24,11 +24,8 @@ import type {
 
 const defaultSettings: Settings = {
   locale: "ja",
-  ai_provider: "local",
-  local_base_url: "http://127.0.0.1:8080/v1",
-  local_model: "Qwen/Qwen2.5-VL-7B-Instruct",
-  openai_model: "gpt-4.1-mini",
-  openrouter_model: "qwen/qwen3.5-397b-a17b",
+  vision_base_url: "http://127.0.0.1:8080/v1",
+  vision_model: "Qwen/Qwen2.5-VL-7B-Instruct",
   capture_interval_minutes: 180,
   quiet_hours_start: "23:00",
   quiet_hours_end: "08:00",
@@ -328,54 +325,20 @@ export default function App() {
               </select>
             </label>
             <label>
-              AIプロバイダ
-              <select
-                value={settingsDraft.ai_provider}
-                onChange={(event) =>
-                  setSettingsDraft((current) => ({
-                    ...current,
-                    ai_provider: event.target.value as Settings["ai_provider"]
-                  }))
-                }
-              >
-                <option value="local">Local / llama.cpp</option>
-                <option value="openai">OpenAI</option>
-                <option value="openrouter">OpenRouter</option>
-              </select>
-            </label>
-            <label>
-              ローカル base URL
+              AI base URL
               <input
-                value={settingsDraft.local_base_url}
+                value={settingsDraft.vision_base_url}
                 onChange={(event) =>
-                  setSettingsDraft((current) => ({ ...current, local_base_url: event.target.value }))
+                  setSettingsDraft((current) => ({ ...current, vision_base_url: event.target.value }))
                 }
               />
             </label>
             <label>
-              ローカルモデル
+              AI model
               <input
-                value={settingsDraft.local_model}
+                value={settingsDraft.vision_model}
                 onChange={(event) =>
-                  setSettingsDraft((current) => ({ ...current, local_model: event.target.value }))
-                }
-              />
-            </label>
-            <label>
-              OpenAIモデル
-              <input
-                value={settingsDraft.openai_model}
-                onChange={(event) =>
-                  setSettingsDraft((current) => ({ ...current, openai_model: event.target.value }))
-                }
-              />
-            </label>
-            <label>
-              OpenRouterモデル
-              <input
-                value={settingsDraft.openrouter_model}
-                onChange={(event) =>
-                  setSettingsDraft((current) => ({ ...current, openrouter_model: event.target.value }))
+                  setSettingsDraft((current) => ({ ...current, vision_model: event.target.value }))
                 }
               />
             </label>

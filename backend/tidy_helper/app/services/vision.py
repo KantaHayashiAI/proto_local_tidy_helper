@@ -3,8 +3,10 @@ from __future__ import annotations
 import base64
 import json
 from abc import ABC, abstractmethod
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Any, TypeVar
+from urllib.parse import urlparse
 
 import httpx
 from openai import OpenAI
@@ -608,40 +610,76 @@ class PreferResponsesVisionProvider(VisionProvider):
         return self.primary.healthcheck()
 
 
-def build_vision_provider(settings: SettingsPayload, config: AppConfig) -> VisionProvider:
-    if settings.ai_provider == "openai":
-        if not config.openai_api_key:
+def resolve_provider_settings(
+    settings: SettingsPayload,
+    config: AppConfig,
+) -> tuple[str, str, str, str | None, dict[str, str], float]:
+    base_url = (settings.vision_base_url or config.default_vision_base_url).strip()
+    model_name = (settings.vision_model or config.default_vision_model).strip()
+    if not base_url:
+        raise VisionError("vision_base_url is not configured")
+    if not model_name:
+        raise VisionError("vision_model is not configured")
+
+    if base_url.startswith("mock://"):
+        return "mock", base_url, model_name, None, {}, 1.0
+
+    parsed = urlparse(base_url)
+    hostname = parsed.hostname or ""
+    provider_name = "local"
+    api_key: str | None = None
+    extra_headers: dict[str, str] = {}
+    timeout_seconds = 30.0
+
+    if hostname == "api.openai.com" or hostname.endswith(".openai.com"):
+        provider_name = "openai"
+        api_key = config.openai_api_key
+        if not api_key:
             raise VisionError("OPENAI_API_KEY is not configured")
-        return OpenAIResponsesVisionProvider(
-            api_key=config.openai_api_key,
-            model_name=settings.openai_model or config.default_openai_model,
-        )
-
-    if settings.ai_provider == "openrouter":
-        if not config.openrouter_api_key:
+    elif hostname == "openrouter.ai" or hostname.endswith(".openrouter.ai"):
+        provider_name = "openrouter"
+        api_key = config.openrouter_api_key
+        if not api_key:
             raise VisionError("OPENROUTER_API_KEY is not configured")
-        return OpenAICompatibleVisionProvider(
-            provider_name="openrouter",
-            base_url="https://openrouter.ai/api/v1",
-            model_name=settings.openrouter_model or config.default_openrouter_model,
-            api_key=config.openrouter_api_key,
-            extra_headers={"HTTP-Referer": "https://github.com/KantaHayashiAI/proto_local_tidy_helper"},
-        )
+        extra_headers = {
+            "HTTP-Referer": "https://github.com/KantaHayashiAI/proto_local_tidy_helper"
+        }
+    else:
+        timeout_seconds = 180.0 if _is_local_host(hostname) else 30.0
 
-    base_url = settings.local_base_url or config.default_local_base_url
+    return provider_name, base_url, model_name, api_key, extra_headers, timeout_seconds
+
+
+def _is_local_host(hostname: str) -> bool:
+    if hostname in {"", "localhost"}:
+        return True
+    try:
+        return ip_address(hostname).is_private or ip_address(hostname).is_loopback
+    except ValueError:
+        return False
+
+
+def build_vision_provider(settings: SettingsPayload, config: AppConfig) -> VisionProvider:
+    provider_name, base_url, model_name, api_key, extra_headers, timeout_seconds = (
+        resolve_provider_settings(settings, config)
+    )
     if base_url.startswith("mock://"):
         return DeterministicVisionProvider()
     return PreferResponsesVisionProvider(
         primary=OpenAICompatibleResponsesVisionProvider(
-            provider_name="local",
+            provider_name=provider_name,
             base_url=base_url,
-            model_name=settings.local_model or config.default_local_model,
-            timeout_seconds=180.0,
+            model_name=model_name,
+            api_key=api_key,
+            extra_headers=extra_headers,
+            timeout_seconds=timeout_seconds,
         ),
         fallback=OpenAICompatibleVisionProvider(
-            provider_name="local",
+            provider_name=provider_name,
             base_url=base_url,
-            model_name=settings.local_model or config.default_local_model,
-            timeout_seconds=180.0,
+            model_name=model_name,
+            api_key=api_key,
+            extra_headers=extra_headers,
+            timeout_seconds=timeout_seconds,
         ),
     )

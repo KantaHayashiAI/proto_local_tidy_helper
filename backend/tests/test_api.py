@@ -9,11 +9,8 @@ def test_end_to_end_mock_capture_flow(client):
         json={
             "settings": {
                 "locale": "ja",
-                "ai_provider": "local",
-                "local_base_url": "mock://local-vlm",
-                "local_model": "deterministic-mock",
-                "openai_model": "gpt-4.1-mini",
-                "openrouter_model": "qwen/qwen3.5-397b-a17b",
+                "vision_base_url": "mock://local-vlm",
+                "vision_model": "deterministic-mock",
                 "capture_interval_minutes": 120,
                 "quiet_hours_start": "23:00",
                 "quiet_hours_end": "08:00",
@@ -55,6 +52,8 @@ def test_end_to_end_mock_capture_flow(client):
     state = test_client.get("/api/state")
     assert state.status_code == 200
     assert state.json()["active_tasks"]
+    assert state.json()["settings"]["vision_base_url"] == "mock://local-vlm"
+    assert state.json()["settings"]["vision_model"] == "deterministic-mock"
     task_id = state.json()["active_tasks"][0]["id"]
     assert "snoozed_until" not in state.json()["active_tasks"][0]
 

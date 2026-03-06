@@ -155,3 +155,81 @@ def test_migrate_legacy_schema_removes_snoozed_until_column(tmp_path: Path):
 
     assert "snoozed_until" not in columns
     assert task_count == 1
+
+
+def test_migrate_legacy_schema_rewrites_settings_to_base_url_and_model(tmp_path: Path):
+    session_factory = create_session_factory(tmp_path / "legacy-settings.db")
+    engine = session_factory.kw["bind"]
+
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE settings (
+                id INTEGER PRIMARY KEY,
+                locale VARCHAR(8) NOT NULL DEFAULT 'ja',
+                ai_provider VARCHAR(32) NOT NULL DEFAULT 'local',
+                local_base_url VARCHAR(255) NOT NULL DEFAULT '',
+                local_model VARCHAR(255) NOT NULL DEFAULT '',
+                openai_model VARCHAR(255) NOT NULL DEFAULT '',
+                openrouter_model VARCHAR(255) NOT NULL DEFAULT '',
+                capture_interval_minutes INTEGER NOT NULL DEFAULT 180,
+                quiet_hours_start VARCHAR(5) NOT NULL DEFAULT '23:00',
+                quiet_hours_end VARCHAR(5) NOT NULL DEFAULT '08:00',
+                notification_cooldown_minutes INTEGER NOT NULL DEFAULT 180,
+                notification_daily_limit INTEGER NOT NULL DEFAULT 4,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL
+            )
+            """
+        )
+        connection.exec_driver_sql(
+            """
+            INSERT INTO settings (
+                id,
+                locale,
+                ai_provider,
+                local_base_url,
+                local_model,
+                openai_model,
+                openrouter_model,
+                capture_interval_minutes,
+                quiet_hours_start,
+                quiet_hours_end,
+                notification_cooldown_minutes,
+                notification_daily_limit,
+                created_at,
+                updated_at
+            ) VALUES (
+                1,
+                'ja',
+                'openrouter',
+                'http://127.0.0.1:1234/v1',
+                'qwen/qwen3.5-9b',
+                'gpt-4.1-mini',
+                'qwen/qwen3.5-397b-a17b',
+                180,
+                '23:00',
+                '08:00',
+                180,
+                4,
+                '2026-03-06 12:00:00',
+                '2026-03-06 12:00:00'
+            )
+            """
+        )
+
+    migrate_legacy_schema(engine)
+
+    with engine.begin() as connection:
+        columns = {
+            row[1] for row in connection.exec_driver_sql("PRAGMA table_info(settings)")
+        }
+        row = connection.exec_driver_sql(
+            "SELECT vision_base_url, vision_model FROM settings WHERE id = 1"
+        ).one()
+
+    assert "vision_base_url" in columns
+    assert "vision_model" in columns
+    assert "ai_provider" not in columns
+    assert "openrouter_model" not in columns
+    assert row == ("https://openrouter.ai/api/v1", "qwen/qwen3.5-397b-a17b")
