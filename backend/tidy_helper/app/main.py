@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timedelta
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -12,8 +11,8 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from tidy_helper.app.config import AppConfig, load_config
-from tidy_helper.app.database import create_session_factory, session_scope
-from tidy_helper.app.models import Base, MemoryRule, Observation, Settings, Task
+from tidy_helper.app.database import create_session_factory, migrate_legacy_schema, session_scope
+from tidy_helper.app.models import Base, MemoryRule, Observation, Settings
 from tidy_helper.app.schemas import (
     ActiveTaskResponse,
     CameraProfilePayload,
@@ -26,7 +25,6 @@ from tidy_helper.app.schemas import (
     PatchSettingsRequest,
     SavePresetRequest,
     SettingsPayload,
-    SnoozeRequest,
     ValidateCameraRequest,
 )
 from tidy_helper.app.services.camera import CameraError, build_camera_adapter
@@ -75,6 +73,7 @@ def create_app(config_override: AppConfig | None = None) -> FastAPI:
     session_factory = create_session_factory(paths.db_path)
     runtime = AppRuntime(config=config, paths=paths, session_factory=session_factory)
     Base.metadata.create_all(session_factory.kw["bind"])
+    migrate_legacy_schema(session_factory.kw["bind"])
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -206,31 +205,6 @@ def create_app(config_override: AppConfig | None = None) -> FastAPI:
         await refresh_scheduler(runtime)
         await runtime.broadcast_state("settings-updated")
         return collect_state(session, runtime)
-
-    @app.post("/api/tasks/{task_id}/done")
-    async def api_task_done(task_id: int, session: Session = Depends(session_dependency)):
-        task = session.get(Task, task_id)
-        if task is None:
-            raise HTTPException(status_code=404, detail="task not found")
-        task.status = "done"
-        task.completed_at = datetime.now(UTC).replace(tzinfo=None)
-        await runtime.broadcast_state("task-done")
-        return {"ok": True}
-
-    @app.post("/api/tasks/{task_id}/snooze")
-    async def api_task_snooze(
-        task_id: int,
-        request: SnoozeRequest,
-        session: Session = Depends(session_dependency),
-    ):
-        task = session.get(Task, task_id)
-        if task is None:
-            raise HTTPException(status_code=404, detail="task not found")
-        task.snoozed_until = datetime.now(UTC).replace(tzinfo=None) + timedelta(
-            minutes=request.minutes
-        )
-        await runtime.broadcast_state("task-snoozed")
-        return {"ok": True}
 
     @app.get("/api/diagnostics", response_model=list[DiagnosticCheckResponse])
     async def api_diagnostics(session: Session = Depends(session_dependency)):

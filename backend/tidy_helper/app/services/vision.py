@@ -29,6 +29,10 @@ class VisionError(RuntimeError):
     pass
 
 
+class ResponsesUnsupportedError(VisionError):
+    pass
+
+
 class VisionProvider(ABC):
     def __init__(self, name: str, model_name: str) -> None:
         self.name = name
@@ -134,14 +138,13 @@ class JsonRetryingProvider(VisionProvider, ABC):
         raw_text = raw_text.strip()
         if raw_text.startswith("```"):
             raw_text = raw_text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-        try:
-            return json.loads(raw_text)
-        except json.JSONDecodeError:
-            start = raw_text.find("{")
-            end = raw_text.rfind("}")
-            if start >= 0 and end > start:
-                return json.loads(raw_text[start : end + 1])
-            raise
+        return json.loads(raw_text)
+
+    def _strip_code_fence(self, raw_text: str) -> str:
+        raw_text = raw_text.strip()
+        if raw_text.startswith("```"):
+            raw_text = raw_text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        return raw_text
 
     def _validate_response(
         self,
@@ -251,12 +254,13 @@ class OpenAICompatibleVisionProvider(JsonRetryingProvider):
         model_name: str,
         api_key: str | None = None,
         extra_headers: dict[str, str] | None = None,
+        timeout_seconds: float = 30.0,
     ) -> None:
         super().__init__(provider_name, model_name)
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.extra_headers = extra_headers or {}
-        self.client = httpx.Client(timeout=30.0)
+        self.client = httpx.Client(timeout=timeout_seconds)
 
     def _run(self, *, image_path: Path, system_prompt: str, user_prompt: str, schema_text: str) -> str:
         headers = {"Content-Type": "application/json", **self.extra_headers}
@@ -283,6 +287,76 @@ class OpenAICompatibleVisionProvider(JsonRetryingProvider):
         if isinstance(content, list):
             return "".join(part.get("text", "") for part in content if isinstance(part, dict))
         return content
+
+    def _parse_json(self, raw_text: str) -> dict[str, Any]:
+        cleaned_text = self._strip_code_fence(raw_text)
+        cleaned_text = self._strip_think_blocks(cleaned_text)
+        try:
+            return json.loads(cleaned_text)
+        except json.JSONDecodeError:
+            pass
+
+        for candidate in self._extract_json_candidates(cleaned_text):
+            try:
+                payload = json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict):
+                return payload
+
+        raise json.JSONDecodeError("No JSON object found in response", cleaned_text, 0)
+
+    def _strip_think_blocks(self, raw_text: str) -> str:
+        cleaned = raw_text
+        while True:
+            start = cleaned.find("<think>")
+            if start == -1:
+                break
+            end = cleaned.find("</think>", start)
+            if end == -1:
+                cleaned = cleaned[:start]
+                break
+            cleaned = f"{cleaned[:start]}{cleaned[end + len('</think>'):]}"
+        return cleaned.strip()
+
+    def _extract_json_candidates(self, raw_text: str) -> list[str]:
+        candidates: list[str] = []
+        for opening, closing in (("{", "}"), ("[", "]")):
+            candidates.extend(self._extract_balanced_candidates(raw_text, opening, closing))
+        return sorted(set(candidates), key=len, reverse=True)
+
+    def _extract_balanced_candidates(
+        self,
+        raw_text: str,
+        opening: str,
+        closing: str,
+    ) -> list[str]:
+        candidates: list[str] = []
+        for start in (index for index, char in enumerate(raw_text) if char == opening):
+            depth = 0
+            in_string = False
+            escaping = False
+            for index in range(start, len(raw_text)):
+                char = raw_text[index]
+                if escaping:
+                    escaping = False
+                    continue
+                if char == "\\" and in_string:
+                    escaping = True
+                    continue
+                if char == "\"":
+                    in_string = not in_string
+                    continue
+                if in_string:
+                    continue
+                if char == opening:
+                    depth += 1
+                elif char == closing:
+                    depth -= 1
+                    if depth == 0:
+                        candidates.append(raw_text[start : index + 1])
+                        break
+        return candidates
 
     def analyze_scene(
         self,
@@ -346,6 +420,194 @@ class OpenAICompatibleVisionProvider(JsonRetryingProvider):
             raise VisionError(f"{self.name} endpoint healthcheck failed: {exc}") from exc
 
 
+class OpenAICompatibleResponsesVisionProvider(JsonRetryingProvider):
+    def __init__(
+        self,
+        *,
+        provider_name: str,
+        base_url: str,
+        model_name: str,
+        api_key: str | None = None,
+        extra_headers: dict[str, str] | None = None,
+        timeout_seconds: float = 30.0,
+    ) -> None:
+        super().__init__(provider_name, model_name)
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
+        self.extra_headers = extra_headers or {}
+        self.client = httpx.Client(timeout=timeout_seconds)
+
+    def _headers(self) -> dict[str, str]:
+        headers = {"Content-Type": "application/json", **self.extra_headers}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
+
+    def _extract_output_text(self, payload: dict[str, Any]) -> str:
+        chunks: list[str] = []
+        for item in payload.get("output", []):
+            if item.get("type") != "message":
+                continue
+            for content in item.get("content", []):
+                if content.get("type") == "output_text":
+                    chunks.append(content.get("text", ""))
+        return "".join(chunks)
+
+    def _run(self, *, image_path: Path, system_prompt: str, user_prompt: str, schema_text: str) -> str:
+        payload = {
+            "model": self.model_name,
+            "input": [
+                {
+                    "role": "system",
+                    "content": [{"type": "input_text", "text": f"{system_prompt}\n\n{schema_text}"}],
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": user_prompt},
+                        {"type": "input_image", "image_url": self._image_data_url(image_path)},
+                    ],
+                },
+            ],
+        }
+        response = self.client.post(f"{self.base_url}/responses", headers=self._headers(), json=payload)
+        if response.status_code in {404, 405, 501}:
+            raise ResponsesUnsupportedError(
+                f"{self.name} endpoint does not support /responses (status={response.status_code})"
+            )
+        response.raise_for_status()
+        data = response.json()
+        output_text = self._extract_output_text(data).strip()
+        if not output_text:
+            raise VisionError(f"{self.name} /responses returned empty output_text")
+        return output_text
+
+    def analyze_scene(
+        self,
+        *,
+        image_path: Path,
+        recent_history: list[dict[str, object]],
+        active_tasks: list[dict[str, object]],
+        rules: list[dict[str, object]],
+        quiet_hours_active: bool,
+        notifications_today: int,
+    ) -> SceneAnalysisResult:
+        system_prompt, user_prompt = build_scene_prompt(
+            recent_history=recent_history,
+            active_tasks=active_tasks,
+            rules=rules,
+            quiet_hours_active=quiet_hours_active,
+            notifications_today=notifications_today,
+        )
+        return self._validate_response(
+            schema_model=SceneAnalysisResult,
+            schema_name="SceneAnalysisResult",
+            schema=SceneAnalysisResult.model_json_schema(),
+            generator=lambda schema_text, _attempt, _error: self._run(
+                image_path=image_path,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                schema_text=schema_text,
+            ),
+        )
+
+    def check_completion(
+        self,
+        *,
+        image_path: Path,
+        task: dict[str, object],
+        reference_summary: str | None,
+    ) -> CompletionAssessmentResult:
+        system_prompt, user_prompt = build_completion_prompt(
+            task=task, reference_summary=reference_summary
+        )
+        return self._validate_response(
+            schema_model=CompletionAssessmentResult,
+            schema_name="CompletionAssessmentResult",
+            schema=CompletionAssessmentResult.model_json_schema(),
+            generator=lambda schema_text, _attempt, _error: self._run(
+                image_path=image_path,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                schema_text=schema_text,
+            ),
+        )
+
+    def healthcheck(self) -> dict[str, object]:
+        if self.base_url.startswith("mock://"):
+            return {"provider": self.name, "mode": "mock"}
+        try:
+            response = self.client.get(f"{self.base_url}/models", headers=self._headers())
+            response.raise_for_status()
+            return {"provider": self.name, "reachable": True}
+        except Exception as exc:  # noqa: BLE001
+            raise VisionError(f"{self.name} endpoint healthcheck failed: {exc}") from exc
+
+
+class PreferResponsesVisionProvider(VisionProvider):
+    def __init__(
+        self,
+        *,
+        primary: OpenAICompatibleResponsesVisionProvider,
+        fallback: OpenAICompatibleVisionProvider,
+    ) -> None:
+        super().__init__(primary.name, primary.model_name)
+        self.primary = primary
+        self.fallback = fallback
+
+    def analyze_scene(
+        self,
+        *,
+        image_path: Path,
+        recent_history: list[dict[str, object]],
+        active_tasks: list[dict[str, object]],
+        rules: list[dict[str, object]],
+        quiet_hours_active: bool,
+        notifications_today: int,
+    ) -> SceneAnalysisResult:
+        try:
+            return self.primary.analyze_scene(
+                image_path=image_path,
+                recent_history=recent_history,
+                active_tasks=active_tasks,
+                rules=rules,
+                quiet_hours_active=quiet_hours_active,
+                notifications_today=notifications_today,
+            )
+        except ResponsesUnsupportedError:
+            return self.fallback.analyze_scene(
+                image_path=image_path,
+                recent_history=recent_history,
+                active_tasks=active_tasks,
+                rules=rules,
+                quiet_hours_active=quiet_hours_active,
+                notifications_today=notifications_today,
+            )
+
+    def check_completion(
+        self,
+        *,
+        image_path: Path,
+        task: dict[str, object],
+        reference_summary: str | None,
+    ) -> CompletionAssessmentResult:
+        try:
+            return self.primary.check_completion(
+                image_path=image_path,
+                task=task,
+                reference_summary=reference_summary,
+            )
+        except ResponsesUnsupportedError:
+            return self.fallback.check_completion(
+                image_path=image_path,
+                task=task,
+                reference_summary=reference_summary,
+            )
+
+    def healthcheck(self) -> dict[str, object]:
+        return self.primary.healthcheck()
+
+
 def build_vision_provider(settings: SettingsPayload, config: AppConfig) -> VisionProvider:
     if settings.ai_provider == "openai":
         if not config.openai_api_key:
@@ -369,8 +631,17 @@ def build_vision_provider(settings: SettingsPayload, config: AppConfig) -> Visio
     base_url = settings.local_base_url or config.default_local_base_url
     if base_url.startswith("mock://"):
         return DeterministicVisionProvider()
-    return OpenAICompatibleVisionProvider(
-        provider_name="local",
-        base_url=base_url,
-        model_name=settings.local_model or config.default_local_model,
+    return PreferResponsesVisionProvider(
+        primary=OpenAICompatibleResponsesVisionProvider(
+            provider_name="local",
+            base_url=base_url,
+            model_name=settings.local_model or config.default_local_model,
+            timeout_seconds=180.0,
+        ),
+        fallback=OpenAICompatibleVisionProvider(
+            provider_name="local",
+            base_url=base_url,
+            model_name=settings.local_model or config.default_local_model,
+            timeout_seconds=180.0,
+        ),
     )

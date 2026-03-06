@@ -83,10 +83,6 @@ class PatchSettingsRequest(BaseModel):
     mask_regions: list[MaskRegionPayload] = []
 
 
-class SnoozeRequest(BaseModel):
-    minutes: int = 120
-
-
 class TaskCandidate(BaseModel):
     title: str
     instruction: str
@@ -121,7 +117,6 @@ class ActiveTaskResponse(BaseModel):
     estimated_minutes: int
     expected_visual_change: str
     status: str
-    snoozed_until: datetime | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

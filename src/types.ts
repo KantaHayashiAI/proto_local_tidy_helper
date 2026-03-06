@@ -58,7 +58,6 @@ export type ActiveTask = {
   estimated_minutes: number;
   expected_visual_change: string;
   status: string;
-  snoozed_until?: string | null;
   created_at: string;
 };
 
